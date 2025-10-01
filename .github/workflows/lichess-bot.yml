@@ -35,46 +35,43 @@ jobs:
        
     - name: Setup engines
       run: |
-        echo "Fetching latest Stockfish dev build from GitHub Actions..."
+        echo "Fetching latest Stockfish dev build from GitHub Releases API..."
         mkdir -p engines
         
-        # Get the ID of the most recent successful 'build' workflow run on master branch
-        RUN_ID=$(curl -s -H "Accept: application/vnd.github+json" \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/official-stockfish/Stockfish/actions/workflows/build.yml/runs?per_page=1&branch=master&status=success" \
-          | jq -r '.workflow_runs[0].id')
+        # Get the tag name of the latest dev release (starts with 'stockfish-dev-')
+        LATEST_TAG=$(curl -s -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/official-stockfish/Stockfish/releases?per_page=1" \
+          | jq -r '.[] | select(.tag_name | startswith("stockfish-dev-")) | .tag_name')
         
-        echo "Latest successful run ID: $RUN_ID"
+        if [ -z "$LATEST_TAG" ]; then
+          echo "No dev release found! Latest releases:"
+          curl -s -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/official-stockfish/Stockfish/releases?per_page=3" \
+            | jq -r '.[].tag_name'
+          exit 1
+        fi
         
-        # Get the download URL for the Linux x86-64-modern artifact (fallback to base if not found)
+        echo "Latest dev tag: $LATEST_TAG"
+        
+        # Get the download URL for the ubuntu-x86-64-bmi2 tar (optimized; fallback to linux-x86-64-modern if not found)
         ARTIFACT_URL=$(curl -s -H "Accept: application/vnd.github+json" \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/official-stockfish/Stockfish/actions/runs/$RUN_ID/artifacts" \
-          | jq -r '.artifacts[] | select(.name | contains("linux-x86-64-modern")) | .archive_download_url')
+          "https://api.github.com/repos/official-stockfish/Stockfish/releases/tags/$LATEST_TAG" \
+          | jq -r '.assets[] | select(.name | contains("ubuntu-x86-64-bmi2") or contains("linux-x86-64-modern")) | .browser_download_url' | head -1)
         
         if [ -z "$ARTIFACT_URL" ] || [ "$ARTIFACT_URL" == "null" ]; then
-          echo "No Linux x86-64-modern artifact found, trying base variant..."
-          ARTIFACT_URL=$(curl -s -H "Accept: application/vnd.github+json" \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/official-stockfish/Stockfish/actions/runs/$RUN_ID/artifacts" \
-            | jq -r '.artifacts[] | select(.name | contains("linux-x86-64")) | .archive_download_url')
-          if [ -z "$ARTIFACT_URL" ] || [ "$ARTIFACT_URL" == "null" ]; then
-            echo "No suitable artifact found! Available artifacts:"
-            curl -s -H "Accept: application/vnd.github+json" \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/official-stockfish/Stockfish/actions/runs/$RUN_ID/artifacts" \
-              | jq -r '.artifacts[].name'
-            exit 1
-          fi
+          echo "No suitable binary asset found for $LATEST_TAG! Available assets:"
+          curl -s -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/official-stockfish/Stockfish/releases/tags/$LATEST_TAG" \
+            | jq -r '.assets[].name'
+          exit 1
         fi
         
         echo "Downloading from $ARTIFACT_URL..."
-        curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          -o stockfish.zip "$ARTIFACT_URL"
+        curl -L -o stockfish.tar "$ARTIFACT_URL"
         
-        unzip -o stockfish.zip -d engines/
+        tar -xf stockfish.tar -C engines/
         
-        # The binary is usually named 'stockfish' in the root of the zip—rename to sf
+        # The binary is named 'stockfish' after extraction—rename to sf
         if [ -f engines/stockfish ]; then
           mv engines/stockfish engines/sf
         else
@@ -84,7 +81,7 @@ jobs:
         fi
         
         chmod +x engines/sf
-        rm stockfish.zip
+        rm stockfish.tar
         
         # Chmods for other engines (if they exist)
         chmod +x engines/fairy-stockfish_x86-64-bmi2 || true
