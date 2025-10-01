@@ -34,62 +34,66 @@ jobs:
         pip install -r requirements.txt
        
     - name: Setup engines
-      run: |
-        echo "Fetching latest Stockfish dev build from GitHub Releases API..."
-        mkdir -p engines
-        
-        # Get the tag name of the latest dev release (starts with 'stockfish-dev-')
-        LATEST_TAG=$(curl -s -H "Accept: application/vnd.github+json" \
-          "https://api.github.com/repos/official-stockfish/Stockfish/releases?per_page=1" \
-          | jq -r '.[] | select(.tag_name | startswith("stockfish-dev-")) | .tag_name')
-        
-        if [ -z "$LATEST_TAG" ]; then
-          echo "No dev release found! Latest releases:"
-          curl -s -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/official-stockfish/Stockfish/releases?per_page=3" \
-            | jq -r '.[].tag_name'
-          exit 1
-        fi
-        
-        echo "Latest dev tag: $LATEST_TAG"
-        
-        # Get the download URL for the ubuntu-x86-64-bmi2 tar (optimized; fallback to linux-x86-64-modern if not found)
-        ARTIFACT_URL=$(curl -s -H "Accept: application/vnd.github+json" \
-          "https://api.github.com/repos/official-stockfish/Stockfish/releases/tags/$LATEST_TAG" \
-          | jq -r '.assets[] | select(.name | contains("ubuntu-x86-64-bmi2") or contains("linux-x86-64-modern")) | .browser_download_url' | head -1)
-        
-        if [ -z "$ARTIFACT_URL" ] || [ "$ARTIFACT_URL" == "null" ]; then
-          echo "No suitable binary asset found for $LATEST_TAG! Available assets:"
-          curl -s -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/official-stockfish/Stockfish/releases/tags/$LATEST_TAG" \
-            | jq -r '.assets[].name'
-          exit 1
-        fi
-        
-        echo "Downloading from $ARTIFACT_URL..."
-        curl -L -o stockfish.tar "$ARTIFACT_URL"
-        
-        tar -xf stockfish.tar -C engines/
-        
-        # The binary is named 'stockfish' after extraction—rename to sf
-        if [ -f engines/stockfish ]; then
-          mv engines/stockfish engines/sf
-        else
-          echo "Stockfish binary not found! Extracted files:"
-          ls -l engines/
-          exit 1
-        fi
-        
-        chmod +x engines/sf
-        rm stockfish.tar
-        
-        # Chmods for other engines (if they exist)
-        chmod +x engines/fairy-stockfish_x86-64-bmi2 || true
-        chmod +x engines/ShashChess39 || true
-        
-        # Debug: Verify
-        engines/sf --version || echo "Version check failed—binary may still work"
-        ls -la engines/
+  run: |
+    echo "Fetching latest Stockfish dev build from GitHub Releases API..."
+    mkdir -p engines
+    
+    # Get the tag name of the latest dev release (starts with 'stockfish-dev-')
+    LATEST_TAG=$(curl -s -H "Accept: application/vnd.github+json" \
+      "https://api.github.com/repos/official-stockfish/Stockfish/releases?per_page=1" \
+      | jq -r '.[] | select(.tag_name | startswith("stockfish-dev-")) | .tag_name')
+    
+    if [ -z "$LATEST_TAG" ]; then
+      echo "No dev release found! Latest releases:"
+      curl -s -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/official-stockfish/Stockfish/releases?per_page=3" \
+        | jq -r '.[].tag_name'
+      exit 1
+    fi
+    
+    echo "Latest dev tag: $LATEST_TAG"
+    
+    # Get the download URL for the ubuntu-x86-64-bmi2 tar (optimized; fallback to linux-x86-64-modern if not found)
+    ARTIFACT_URL=$(curl -s -H "Accept: application/vnd.github+json" \
+      "https://api.github.com/repos/official-stockfish/Stockfish/releases/tags/$LATEST_TAG" \
+      | jq -r '.assets[] | select(.name | contains("ubuntu-x86-64-bmi2") or contains("linux-x86-64-modern")) | .browser_download_url' | head -1)
+    
+    if [ -z "$ARTIFACT_URL" ] || [ "$ARTIFACT_URL" == "null" ]; then
+      echo "No suitable binary asset found for $LATEST_TAG! Available assets:"
+      curl -s -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/official-stockfish/Stockfish/releases/tags/$LATEST_TAG" \
+        | jq -r '.assets[].name'
+      exit 1
+    fi
+    
+    echo "Downloading from $ARTIFACT_URL..."
+    curl -L -o stockfish.tar "$ARTIFACT_URL"
+    
+    tar -xf stockfish.tar -C engines/
+    
+    # Check for the binary inside the stockfish/ subdirectory or root
+    if [ -f engines/stockfish/stockfish ]; then
+      mv engines/stockfish/stockfish engines/sf
+      rmdir engines/stockfish 2>/dev/null || true
+    elif [ -f engines/stockfish ]; then
+      mv engines/stockfish engines/sf
+    else
+      echo "Stockfish binary not found! Extracted files:"
+      ls -lR engines/  # Recursive list to debug structure
+      exit 1
+    fi
+    
+    chmod +x engines/sf
+    rm stockfish.tar
+    
+    # Chmods for other engines (if they exist)
+    chmod +x engines/fairy-stockfish_x86-64-bmi2 || true
+    chmod +x engines/ShashChess39 || true
+    chmod +x engines/nsf || true  # Added for the nsf binary seen in the tar
+    
+    # Debug: Verify
+    engines/sf --version || echo "Version check failed—binary may still work"
+    ls -la engines/
       
     - name: Configure bot
       run: |
