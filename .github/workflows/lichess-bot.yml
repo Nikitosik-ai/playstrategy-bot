@@ -29,7 +29,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y jq unzip build-essential  # Added build-essential for potential compilation
+        sudo apt-get install -y jq unzip build-essential
         python -m pip install --upgrade pip
         pip install -r requirements.txt
        
@@ -45,9 +45,9 @@ jobs:
         
         if [ -z "$LATEST_TAG" ]; then
           echo "No dev release found! Falling back to ppigazzini downloader..."
-          curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e sf
-          chmod +x engines/sf
-          engines/sf --version || echo "Version check failed—binary may still work"
+          curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e stockfish
+          chmod +x engines/stockfish
+          engines/stockfish --version || echo "Version check failed—binary may still work"
           ls -la engines/
           exit 0
         fi
@@ -61,9 +61,9 @@ jobs:
         
         if [ -z "$ARTIFACT_URL" ] || [ "$ARTIFACT_URL" == "null" ]; then
           echo "No suitable binary tar found for $LATEST_TAG! Falling back to ppigazzini downloader..."
-          curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e sf
-          chmod +x engines/sf
-          engines/sf --version || echo "Version check failed—binary may still work"
+          curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e stockfish
+          chmod +x engines/stockfish
+          engines/stockfish --version || echo "Version check failed—binary may still work"
           ls -la engines/
           exit 0
         fi
@@ -73,21 +73,21 @@ jobs:
         
         tar -xf stockfish.tar -C engines/
         
-        # Check for the binary inside the stockfish/ subdirectory or root
-        if [ -f engines/stockfish/stockfish ]; then
-          mv engines/stockfish/stockfish engines/sf
+        # Check for the binary inside the stockfish/ subdirectory with the correct name
+        if [ -f engines/stockfish/stockfish-ubuntu-x86-64-bmi2 ]; then
+          mv engines/stockfish/stockfish-ubuntu-x86-64-bmi2 engines/stockfish
           rmdir engines/stockfish 2>/dev/null || true
         elif [ -f engines/stockfish ]; then
-          mv engines/stockfish engines/sf
+          : # Already in place, do nothing
         else
           echo "Stockfish binary not found! Extracted files:"
           ls -lR engines/  # Recursive list to debug structure
           echo "Falling back to ppigazzini downloader..."
-          curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e sf
-          chmod +x engines/sf
+          curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e stockfish
+          chmod +x engines/stockfish
         fi
         
-        chmod +x engines/sf
+        chmod +x engines/stockfish
         rm stockfish.tar
         
         # Chmods for other engines (if they exist)
@@ -96,7 +96,7 @@ jobs:
         chmod +x engines/nsf || true  # Added for the nsf binary seen in the tar
     
         # Debug: Verify
-        engines/sf --version || echo "Version check failed—binary may still work"
+        engines/stockfish --version || echo "Version check failed—binary may still work"
         ls -la engines/
       
     - name: Configure bot
