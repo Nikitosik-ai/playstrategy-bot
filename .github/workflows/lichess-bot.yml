@@ -1,125 +1,129 @@
-name: Lichess Bot
+ame: Lichess Bot Runner
+
+concurrency:
+  group: lichess-bot-runner
+  cancel-in-progress: true
 
 on:
-  push:
-    branches: [ main, master ]
-  schedule:
-    - cron: '0 */6 * * *'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Bot Mode'
+        type: choice
+        required: true
+        options:
+          - normal
+          - matchmaking
+          - tournament
+      tournament_id:
+        description: 'Tournament ID (if tournament mode)'
+        type: string
+        required: false
+      team_id:
+        description: 'Team ID (optional)'
+        type: string
+        required: false
+      password:
+        description: 'Tournament password (optional)'
+        type: string
+        required: false
+  schedule:
+    - cron: '0 */6 * * *'  # every 6 hours
+  push:
+    branches: [ main ]
+    paths:
+      - '**.py'
+      - 'config.yml'
 
-env:
-  LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}
-  TOURNAMENT_ID: "OB2F7oaO" # Added tournament ID
+permissions:
+  actions: write
+  contents: write
 
 jobs:
-  deploy-bot:
+  bot-runner:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
-   
+    timeout-minutes: 355  # restart just before GitHub limit
+
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-   
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-   
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y jq unzip build-essential
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-       
-    - name: Setup engines
-      run: |
-        echo "Fetching latest Stockfish dev build from GitHub Releases API..."
-        mkdir -p engines
-        
-        # Get the tag name of the latest dev release (starts with 'stockfish-dev-')
-        LATEST_TAG=$(curl -s -H "Accept: application/vnd.github+json" \
-          "https://api.github.com/repos/official-stockfish/Stockfish/releases?per_page=1" \
-          | jq -r '.[] | select(.tag_name | startswith("stockfish-dev-")) | .tag_name')
-        
-        if [ -z "$LATEST_TAG" ]; then
-          echo "No dev release found! Falling back to ppigazzini downloader..."
-          curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e stockfish
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install tenacity pyyaml
+
+      - name: Setup Engines
+        run: |
+          mkdir -p engines
+          curl -k -L -o stockfish.zip https://abrok.eu/stockfish/latest/linux/stockfish_x64_modern.zip
+          unzip -o stockfish.zip -d engines/
+          mv engines/stockfish_* engines/stockfish
           chmod +x engines/stockfish
-          engines/stockfish --version || echo "Version check failed—binary may still work"
-          ls -la engines/
-          exit 0
-        fi
-        
-        echo "Latest dev tag: $LATEST_TAG"
-        
-        # Get the download URL for a binary tar (avoiding source archives)
-        ARTIFACT_URL=$(curl -s -H "Accept: application/vnd.github+json" \
-          "https://api.github.com/repos/official-stockfish/Stockfish/releases/tags/$LATEST_TAG" \
-          | jq -r '.assets[] | select(.name | endswith(".tar") and (contains("ubuntu-x86-64-bmi2") or contains("linux-x86-64-modern")) and (contains("src") | not)) | .browser_download_url' | head -1)
-        
-        if [ -z "$ARTIFACT_URL" ] || [ "$ARTIFACT_URL" == "null" ]; then
-          echo "No suitable binary tar found for $LATEST_TAG! Falling back to ppigazzini downloader..."
-          curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e stockfish
-          chmod +x engines/stockfish
-          engines/stockfish --version || echo "Version check failed—binary may still work"
-          ls -la engines/
-          exit 0
-        fi
-        
-        echo "Downloading from $ARTIFACT_URL..."
-        curl -L -o stockfish.tar "$ARTIFACT_URL"
-        
-        tar -xf stockfish.tar -C engines/
-        
-        # Check for the binary inside the stockfish/ subdirectory with the correct name
-        if [ -f engines/stockfish/stockfish-ubuntu-x86-64-bmi2 ]; then
-          mv engines/stockfish/stockfish-ubuntu-x86-64-bmi2 engines/stockfish
-          rmdir engines/stockfish 2>/dev/null || true
-        elif [ -f engines/stockfish ]; then
-          : # Already in place, do nothing
-        else
-          echo "Stockfish binary not found! Extracted files:"
-          ls -lR engines/  # Recursive list to debug structure
-          echo "Falling back to ppigazzini downloader..."
-          curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e stockfish
-          chmod +x engines/stockfish
-        fi
-        
-        chmod +x engines/stockfish
-        rm stockfish.tar
-        
-        # Chmods for other engines (if they exist)
-        chmod +x engines/fairy-stockfish_x86-64-bmi2 || true
-        chmod +x engines/ShashChess39 || true
-        chmod +x engines/nsf || true  # Added for the nsf binary seen in the tar
-    
-        # Debug: Verify
-        engines/stockfish --version || echo "Version check failed—binary may still work"
-        ls -la engines/
-      
-    - name: Configure bot
-      run: |
-        python3 << 'EOF'
-        import yaml, os
-        try:
-            with open('config.yml', 'r') as f:
-                config = yaml.safe_load(f) or {}
-            config['token'] = os.environ['LICHESS_TOKEN']
-            config.setdefault('engine', {})
-            config['engine']['dir'] = './engines'
-            config['engine']['name'] = 'stockfish'
-            with open('config.yml', 'w') as f:
-                yaml.dump(config, f, default_flow_style=False)
-            print("✅ Configuration successful")
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            exit(1)
-        EOF
-       
-    - name: Launch bot
-      timeout-minutes: 340
-      run: |
-        echo "🤖 Starting bot in tournament $TOURNAMENT_ID..."
-        python3 user_interface.py tournament "$TOURNAMENT_ID"
+          # Other engines
+          if [ -f "engines/fsf" ]; then chmod +x engines/fsf; fi
+          if [ -f "engines/ShashChess39" ]; then chmod +x engines/ShashChess39; fi
+
+      - name: Inject Lichess Bot Token
+        env:
+          LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}
+        run: |
+          python3 << 'EOF'
+          import os, yaml
+          token = os.environ.get("LICHESS_TOKEN")
+          if not token:
+              print("ERROR: LICHESS_TOKEN secret is missing!")
+              exit(1)
+          with open("config.yml","r") as f:
+              config = yaml.safe_load(f) or {}
+          config["token"] = token
+          with open("config.yml","w") as f:
+              yaml.dump(config,f, default_flow_style=False)
+          print("✅ Token injected successfully")
+          EOF
+
+      - name: Launch Bot
+        run: |
+          CMD_BASE="python3 -u user_interface.py"
+          MODE="${{ github.event.inputs.mode }}"
+          TOUR_ID="${{ github.event.inputs.tournament_id }}"
+          TEAM_ID="${{ github.event.inputs.team_id }}"
+          PASSWORD="${{ github.event.inputs.password }}"
+
+          if [[ "$MODE" == "matchmaking" ]]; then
+              CMD="$CMD_BASE matchmaking"
+              echo "🤖 Running command: $CMD"
+              eval "$CMD"
+
+          elif [[ "$MODE" == "tournament" ]]; then
+              if [[ -z "$TOUR_ID" ]]; then
+                  echo "⚠️ Tournament ID missing. Skipping."
+              else
+                  # Construct CLI arguments correctly
+                  ARGS="$TOUR_ID"
+                  [[ -n "$TEAM_ID" ]] && ARGS="$ARGS $TEAM_ID"
+                  [[ -n "$PASSWORD" ]] && ARGS="$ARGS $PASSWORD"
+
+                  echo "🤖 Joining tournament: $ARGS"
+                  # pass tournament as real argument
+                  eval "$CMD_BASE \"tournament $ARGS\""
+              fi
+
+          else
+              echo "⚠️ Mode not recognized. Running normal mode."
+              eval "$CMD_BASE"
+          fi
+
+      - name: Auto-Restart After Timeout
+        run: |
+          BOT_PID=$!
+          ( sleep 20700 && echo "⏰ Time's up. Restarting bot..." && kill -SIGTERM $BOT_PID ) &
+          wait $BOT_PID
+          echo "Bot ended cleanly."
