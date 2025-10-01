@@ -33,9 +33,15 @@ jobs:
         
     - name: Setup engines
       run: |
-        echo "Downloading Stockfish via downloader script..."
+        echo "Downloading latest Stockfish dev build via downloader script..."
+        mkdir -p engines
         curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e sf
+       if [ ! -f engines/sf ]; then
+         mv engines/stockfish/stockfish engines/sf 2>/dev/null || true
+         rmdir engines/stockfish 2>/dev/null || true
+       fi
         chmod +x engines/sf
+         ls -l engines/  # Debug: Check if sf exists
        
         chmod +x engines/stockfish
         chmod +x engines/fairy-stockfish_x86-64-bmi2 || true
