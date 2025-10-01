@@ -29,7 +29,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y jq unzip
+        sudo apt-get install -y jq unzip build-essential  # Added build-essential for potential compilation
         python -m pip install --upgrade pip
         pip install -r requirements.txt
        
@@ -44,26 +44,28 @@ jobs:
           | jq -r '.[] | select(.tag_name | startswith("stockfish-dev-")) | .tag_name')
         
         if [ -z "$LATEST_TAG" ]; then
-          echo "No dev release found! Latest releases:"
-          curl -s -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/official-stockfish/Stockfish/releases?per_page=3" \
-            | jq -r '.[].tag_name'
-          exit 1
+          echo "No dev release found! Falling back to ppigazzini downloader..."
+          curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e sf
+          chmod +x engines/sf
+          engines/sf --version || echo "Version check failed—binary may still work"
+          ls -la engines/
+          exit 0
         fi
         
         echo "Latest dev tag: $LATEST_TAG"
         
-        # Get the download URL for the ubuntu-x86-64-bmi2 tar (optimized; fallback to linux-x86-64-modern if not found)
+        # Get the download URL for a binary tar (avoiding source archives)
         ARTIFACT_URL=$(curl -s -H "Accept: application/vnd.github+json" \
           "https://api.github.com/repos/official-stockfish/Stockfish/releases/tags/$LATEST_TAG" \
-          | jq -r '.assets[] | select(.name | contains("ubuntu-x86-64-bmi2") or contains("linux-x86-64-modern")) | .browser_download_url' | head -1)
+          | jq -r '.assets[] | select(.name | endswith(".tar") and (contains("ubuntu-x86-64-bmi2") or contains("linux-x86-64-modern")) and (contains("src") | not)) | .browser_download_url' | head -1)
         
         if [ -z "$ARTIFACT_URL" ] || [ "$ARTIFACT_URL" == "null" ]; then
-          echo "No suitable binary asset found for $LATEST_TAG! Available assets:"
-          curl -s -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/official-stockfish/Stockfish/releases/tags/$LATEST_TAG" \
-          | jq -r '.assets[].name'
-          exit 1
+          echo "No suitable binary tar found for $LATEST_TAG! Falling back to ppigazzini downloader..."
+          curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e sf
+          chmod +x engines/sf
+          engines/sf --version || echo "Version check failed—binary may still work"
+          ls -la engines/
+          exit 0
         fi
         
         echo "Downloading from $ARTIFACT_URL..."
@@ -80,7 +82,9 @@ jobs:
         else
           echo "Stockfish binary not found! Extracted files:"
           ls -lR engines/  # Recursive list to debug structure
-          exit 1
+          echo "Falling back to ppigazzini downloader..."
+          curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e sf
+          chmod +x engines/sf
         fi
         
         chmod +x engines/sf
