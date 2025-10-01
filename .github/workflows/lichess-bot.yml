@@ -33,9 +33,9 @@ jobs:
         
     - name: Setup engines
       run: |
-        curl -sSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s
-       tar -xf stockfish-*.tar && rm stockfish-*.tar
-       mv stockfish/stockfish-* engines/stockfish && rm -r stockfish
+        echo "Downloading Stockfish via downloader script..."
+        curl -fsSL https://raw.githubusercontent.com/ppigazzini/stockfish-downloader/main/posix_helper.sh | sh -s -- -d engines/ -e sf
+        chmod +x engines/sf
        
         chmod +x engines/stockfish
         chmod +x engines/fairy-stockfish_x86-64-bmi2 || true
