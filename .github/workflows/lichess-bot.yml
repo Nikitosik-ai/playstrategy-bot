@@ -1,4 +1,4 @@
-ame: Lichess Bot Runner
+name: Lichess Bot Runner
 
 concurrency:
   group: lichess-bot-runner
