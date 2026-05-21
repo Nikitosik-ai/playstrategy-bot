@@ -70,7 +70,7 @@ class Config:
             'message': "Would you like another game? I've sent a rematch challenge!"
         }))
 
-        return cls(yaml_config.get('url', 'https://lichess.org'),
+        return cls(yaml_config.get('url', 'https://playstrategy.org'),
                    yaml_config['token'],
                    engine_configs,
                    syzygy_config,
