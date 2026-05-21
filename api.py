@@ -42,17 +42,17 @@ class API:
         await self.close()
 
     def append_user_agent(self, username: str) -> None:
-        self.lichess_session.headers['User-Agent'] += f' user:{username}'
+        self.playstrategy_session.headers['User-Agent'] += f' user:{username}'
         self.external_session.headers['User-Agent'] += f' user:{username}'
 
     async def close(self) -> None:
-        await self.lichess_session.close()
+        await self.playstrategy_session.close()
         await self.external_session.close()
 
     @retry(**BASIC_RETRY_CONDITIONS)
     async def abort_game(self, game_id: str) -> bool:
         try:
-            async with self.lichess_session.post(f'/api/bot/game/{game_id}/abort') as response:
+            async with self.playstrategy_session.post(f'/api/bot/game/{game_id}/abort') as response:
                 response.raise_for_status()
                 return True
         except aiohttp.ClientResponseError as e:
@@ -61,7 +61,7 @@ class API:
 
     @retry(**JSON_RETRY_CONDITIONS)
     async def accept_challenge(self, challenge_id: str) -> bool:
-        async with self.lichess_session.post(f'/api/challenge/{challenge_id}/accept') as response:
+        async with self.playstrategy_session.post(f'/api/challenge/{challenge_id}/accept') as response:
             json_response = await response.json()
             if 'error' in json_response:
                 print(f'Challenge "{challenge_id}" could not be accepted: {json_response["error"]}')
@@ -71,7 +71,7 @@ class API:
     @retry(**BASIC_RETRY_CONDITIONS)
     async def cancel_challenge(self, challenge_id: str) -> bool:
         try:
-            async with self.lichess_session.post(f'/api/challenge/{challenge_id}/cancel') as response:
+            async with self.playstrategy_session.post(f'/api/challenge/{challenge_id}/cancel') as response:
                 response.raise_for_status()
                 return True
         except aiohttp.ClientResponseError as e:
@@ -81,7 +81,7 @@ class API:
     @retry(**BASIC_RETRY_CONDITIONS)
     async def claim_victory(self, game_id: str) -> bool:
         try:
-            async with self.lichess_session.post(f'/api/bot/game/{game_id}/claim-victory') as response:
+            async with self.playstrategy_session.post(f'/api/bot/game/{game_id}/claim-victory') as response:
                 response.raise_for_status()
                 return True
         except aiohttp.ClientResponseError as e:
@@ -92,7 +92,7 @@ class API:
                                challenge_request: Challenge_Request,
                                queue: asyncio.Queue[API_Challenge_Reponse]) -> None:
         try:
-            async with self.lichess_session.post(f'/api/challenge/{challenge_request.opponent_username}',
+            async with self.playstrategy_session.post(f'/api/challenge/{challenge_request.opponent_username}',
                                                  data={'rated': 'true' if challenge_request.rated else 'false',
                                                        'clock.limit': challenge_request.initial_time,
                                                        'clock.increment': challenge_request.increment,
@@ -126,7 +126,7 @@ class API:
     @retry(**BASIC_RETRY_CONDITIONS)
     async def decline_challenge(self, challenge_id: str, reason: Decline_Reason) -> bool:
         try:
-            async with self.lichess_session.post(f'/api/challenge/{challenge_id}/decline',
+            async with self.playstrategy_session.post(f'/api/challenge/{challenge_id}/decline',
                                                  data={'reason': reason}) as response:
                 response.raise_for_status()
                 return True
@@ -136,7 +136,7 @@ class API:
 
     @retry(**JSON_RETRY_CONDITIONS)
     async def get_account(self) -> dict[str, Any]:
-        async with self.lichess_session.get('/api/account') as response:
+        async with self.playstrategy_session.get('/api/account') as response:
             json_response = await response.json()
 
             if 'error' in json_response:
@@ -160,7 +160,7 @@ class API:
 
     async def get_cloud_eval(self, fen: str, variant: Variant, timeout: int) -> dict[str, Any] | None:
         try:
-            async with self.lichess_session.get('/api/cloud-eval', params={'fen': fen, 'variant': variant},
+            async with self.playstrategy_session.get('/api/cloud-eval', params={'fen': fen, 'variant': variant},
                                                 timeout=aiohttp.ClientTimeout(total=timeout)) as response:
                 if response.status == 404:
                     return
@@ -186,21 +186,21 @@ class API:
 
     @retry(**JSON_RETRY_CONDITIONS)
     async def get_event_stream(self, queue: asyncio.Queue[dict[str, Any]]) -> None:
-        async with self.lichess_session.get('/api/stream/event', timeout=STREAM_TIMEOUT) as response:
+        async with self.playstrategy_session.get('/api/stream/event', timeout=STREAM_TIMEOUT) as response:
             async for line in response.content:
                 if line.strip():
                     await queue.put(json.loads(line))
 
     @retry(**GAME_STREAM_RETRY_CONDITIONS)
     async def get_game_stream(self, game_id: str, queue: asyncio.Queue[dict[str, Any]]) -> None:
-        async with self.lichess_session.get(f'/api/bot/game/stream/{game_id}', timeout=STREAM_TIMEOUT) as response:
+        async with self.playstrategy_session.get(f'/api/bot/game/stream/{game_id}', timeout=STREAM_TIMEOUT) as response:
             async for line in response.content:
                 if line.strip():
                     await queue.put(json.loads(line))
 
     @retry(**JSON_RETRY_CONDITIONS)
     async def get_online_bots(self) -> list[dict[str, Any]]:
-        async with self.lichess_session.get('/api/bot/online', timeout=STREAM_TIMEOUT) as response:
+        async with self.playstrategy_session.get('/api/bot/online', timeout=STREAM_TIMEOUT) as response:
             return [json.loads(line) async for line in response.content if line.strip()]
 
     async def get_opening_explorer(self,
@@ -232,25 +232,25 @@ class API:
 
     @retry(**JSON_RETRY_CONDITIONS)
     async def get_token_scopes(self, token: str) -> str:
-        async with self.lichess_session.post('/api/token/test', data=token) as response:
+        async with self.playstrategy_session.post('/api/token/test', data=token) as response:
             json_response = await response.json()
             return json_response[token]['scopes']
 
     @retry(**JSON_RETRY_CONDITIONS)
     async def get_tournament_info(self, tournament_id: str) -> dict[str, Any]:
-        async with self.lichess_session.get(f'/api/tournament/{tournament_id}') as response:
+        async with self.playstrategy_session.get(f'/api/tournament/{tournament_id}') as response:
             return await response.json()
 
     @retry(**JSON_RETRY_CONDITIONS)
     async def get_user_status(self, username: str) -> dict[str, Any]:
-        async with self.lichess_session.get('/api/users/status', params={'ids': username}) as response:
+        async with self.playstrategy_session.get('/api/users/status', params={'ids': username}) as response:
             json_response = await response.json()
             return json_response[0]
 
     @retry(**JSON_RETRY_CONDITIONS)
     async def handle_takeback(self, game_id: str, accept: bool) -> bool:
         accept_str = 'yes' if accept else 'no'
-        async with self.lichess_session.post(f'/api/bot/game/{game_id}/takeback/{accept_str}') as response:
+        async with self.playstrategy_session.post(f'/api/bot/game/{game_id}/takeback/{accept_str}') as response:
             json_response = await response.json()
             if 'error' in json_response:
                 print(f'Takeback error: {json_response["error"]}')
@@ -260,7 +260,7 @@ class API:
     @retry(**JSON_RETRY_CONDITIONS)
     async def join_team(self, team: str, password: str | None) -> bool:
         data = {'password': password} if password else None
-        async with self.lichess_session.post(f'/team/{team.lower()}/join', data=data) as response:
+        async with self.playstrategy_session.post(f'/team/{team.lower()}/join', data=data) as response:
             json_response = await response.json()
             if 'error' in json_response:
                 print(f'Joining team "{team}" failed: {json_response["error"]}')
@@ -274,7 +274,7 @@ class API:
             data['team'] = team.lower()
         if password:
             data['password'] = password
-        async with self.lichess_session.post(f'/api/tournament/{tournament_id}/join', data=data) as response:
+        async with self.playstrategy_session.post(f'/api/tournament/{tournament_id}/join', data=data) as response:
             json_response = await response.json()
             if 'error' in json_response:
                 print(f'Joining tournament "{tournament_id}" failed: {json_response["error"]}')
@@ -292,7 +292,7 @@ class API:
     @retry(**BASIC_RETRY_CONDITIONS)
     async def resign_game(self, game_id: str) -> bool:
         try:
-            async with self.lichess_session.post(f'/api/bot/game/{game_id}/resign') as response:
+            async with self.playstrategy_session.post(f'/api/bot/game/{game_id}/resign') as response:
                 response.raise_for_status()
                 return True
         except aiohttp.ClientResponseError as e:
@@ -301,7 +301,7 @@ class API:
 
     async def send_chat_message(self, game_id: str, room: str, text: str) -> bool:
         try:
-            async with self.lichess_session.post(f'/api/bot/game/{game_id}/chat',
+            async with self.playstrategy_session.post(f'/api/bot/game/{game_id}/chat',
                                                  data={'room': room, 'text': text},
                                                  timeout=aiohttp.ClientTimeout(total=1.0)) as response:
                 response.raise_for_status()
@@ -312,7 +312,7 @@ class API:
     @retry(**MOVE_RETRY_CONDITIONS)
     async def send_move(self, game_id: str, uci_move: str, offer_draw: bool) -> bool:
         try:
-            async with self.lichess_session.post(f'/api/bot/game/{game_id}/move/{uci_move}',
+            async with self.playstrategy_session.post(f'/api/bot/game/{game_id}/move/{uci_move}',
                                                  params={'offeringDraw': 'true' if offer_draw else 'false'},
                                                  timeout=aiohttp.ClientTimeout(total=1.0)) as response:
                 response.raise_for_status()
@@ -327,7 +327,7 @@ class API:
     @retry(**BASIC_RETRY_CONDITIONS)
     async def upgrade_account(self) -> bool:
         try:
-            async with self.lichess_session.post('/api/bot/account/upgrade') as response:
+            async with self.playstrategy_session.post('/api/bot/account/upgrade') as response:
                 response.raise_for_status()
                 return True
         except aiohttp.ClientResponseError as e:
@@ -337,7 +337,7 @@ class API:
     @retry(**BASIC_RETRY_CONDITIONS)
     async def withdraw_tournament(self, tournament_id: str) -> bool:
         try:
-            async with self.lichess_session.post(f'/api/tournament/{tournament_id}/withdraw') as response:
+            async with self.playstrategy_session.post(f'/api/tournament/{tournament_id}/withdraw') as response:
                 response.raise_for_status()
                 return True
         except aiohttp.ClientResponseError as e:
@@ -347,7 +347,7 @@ class API:
     @retry(**BASIC_RETRY_CONDITIONS)
     async def decline_draw(self, game_id: str) -> bool:
         try:
-            async with self.lichess_session.post(f'/api/bot/game/{game_id}/draw/no') as response:
+            async with self.playstrategy_session.post(f'/api/bot/game/{game_id}/draw/no') as response:
                 response.raise_for_status()
                 return True
         except aiohttp.ClientResponseError as e:
@@ -357,7 +357,7 @@ class API:
     @retry(**BASIC_RETRY_CONDITIONS)
     async def accept_draw(self, game_id: str) -> bool:
         try:
-            async with self.lichess_session.post(f'/api/bot/game/{game_id}/draw/yes') as response:
+            async with self.playstrategy_session.post(f'/api/bot/game/{game_id}/draw/yes') as response:
                 response.raise_for_status()
                 return True
         except aiohttp.ClientResponseError as e:
