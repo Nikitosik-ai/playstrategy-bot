@@ -62,12 +62,6 @@ jobs:
 
       - name: Setup Engines
         run: |
-          mkdir -p engines
-          curl -k -L -o stockfish.zip https://github.com/official-stockfish/Stockfish/releases/download/stockfish-dev-20260614-74a0a737/stockfish-windows-x86-64-universal.zip
-          unzip -o stockfish.zip -d engines/
-          mv engines/stockfish_* engines/stockfish
-          chmod +x engines/stockfish
-          # Other engines
           if [ -f "engines/fsf" ]; then chmod +x engines/fsf; fi
           if [ -f "engines/ShashChess39" ]; then chmod +x engines/ShashChess39; fi
 
