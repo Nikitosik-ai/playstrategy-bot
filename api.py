@@ -46,13 +46,13 @@ class API:
         self.external_session.headers['User-Agent'] += f' user:{username}'
 
     async def close(self) -> None:
-        await self.playstrategy_session.close()
+        await self.lichess_session.close()
         await self.external_session.close()
 
     @retry(**BASIC_RETRY_CONDITIONS)
     async def abort_game(self, game_id: str) -> bool:
         try:
-            async with self.playstrategy_session.post(f'/api/bot/game/{game_id}/abort') as response:
+            async with self.lichess_session.post(f'/api/bot/game/{game_id}/abort') as response:
                 response.raise_for_status()
                 return True
         except aiohttp.ClientResponseError as e:
