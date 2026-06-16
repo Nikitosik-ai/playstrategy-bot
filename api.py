@@ -42,7 +42,7 @@ class API:
         await self.close()
 
     def append_user_agent(self, username: str) -> None:
-        self.playstrategy_session.headers['User-Agent'] += f' user:{username}'
+        self.lichess_session.headers['User-Agent'] += f' user:{username}'
         self.external_session.headers['User-Agent'] += f' user:{username}'
 
     async def close(self) -> None:
