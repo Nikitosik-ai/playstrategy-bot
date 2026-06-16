@@ -35,9 +35,6 @@ jobs:
           
       - name: Сделать движок исполняемым
         run: chmod +x ./engines/ShashChess39.exe
-        
-      - name: Сделать вариант-движок исполняемым
-        run: chmod +x ./engines/fsf.exe
 
       - name: Запустить бота
         run:  python user_interface.py 
